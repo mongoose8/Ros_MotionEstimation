@@ -1,0 +1,8 @@
+<launch>
+
+<node pkg="motionEstimation" type="motionEstimation_node" name="motionEstimation_node" output="screen">
+
+</node>
+
+</launch>
+
