@@ -452,7 +452,7 @@ void motionEstimation_node::imageCalc2(const cv::Mat& left, const cv::Mat& right
                      break;
                  }
 
-                 std::vector<cv::Point2f> inliersHorizontal_L1, inliersHorizontal_R1, inliersHorizontal_L2, inliersHorizontal_R2;
+                 //std::vector<cv::Point2f> inliersHorizontal_L1, inliersHorizontal_R1, inliersHorizontal_L2, inliersHorizontal_R2;
                  getInliersFromHorizontalDirection(make_pair(points_L1, points_R1), inliersHorizontal_L1, inliersHorizontal_R1);
                  getInliersFromHorizontalDirection(make_pair(points_L2, points_R2), inliersHorizontal_L2, inliersHorizontal_R2);
                  //delete all points that are not correctly found in stereo setup
@@ -550,16 +550,21 @@ void motionEstimation_node::imageCalc2(const cv::Mat& left, const cv::Mat& right
 
                    cv::Mat rotation_PnP_L, translation_PnP_L;
                    decomposeProjectionMat(newPos_PnP_L, translation_PnP_L, rotation_PnP_L);
-                   Eigen::Matrix3f _t = Eigen::Matrix<float,3,3,Eigen::RowMajor>(cv::Matx33f(rotation_PnP_L).val);
-                   Eigen::Vector3f vfor = _t.col(2).normalized()*100;
+                   Eigen::Matrix3f _tl = Eigen::Matrix<float,3,3,Eigen::RowMajor>(cv::Matx33f(rotation_PnP_L).val);
+                   Eigen::Vector3f vfo = _t.col(2).normalized()*100;
                   
-                   geometry_msgs::Pose pose;
-                   pose.position.x = vfor(0);
-                   pose.position.y = vfor(1);
-                   pose.position.z = vfor(2);
-                   posePublisher_.publish(pose);
-                   Eigen::Vector3f m = Eigen::Vector3f(cv::Vec3f(translation_PnP_L).val);
+                   geometry_msgs::Pose pose_left;
+                   pose_left.position.x = vfo(0);
+                   pose_left.position.y = vfo(1);
+                   pose_left.position.z = vfo(2);
+                   posePublisher_.publish(pose_left);
+                   Eigen::Vector3f ml = Eigen::Vector3f(cv::Vec3f(translation_PnP_L).val);
+                   currentPos_PnP_L.release();
+                   newTrans3D_PnP_L.release();
                    currentPos_PnP_L  = newPos_PnP_L ;
+                   newPos_PnP_L.release();
+                   rotation_PnP_L.release(); 
+                   translation_PnP_L.release();
    #else
                  //RIGHT:
                                 bool poseEstimationFoundTemp_R = false;
@@ -598,13 +603,19 @@ void motionEstimation_node::imageCalc2(const cv::Mat& left, const cv::Mat& right
                                Eigen::Matrix3f _t = Eigen::Matrix<float,3,3,Eigen::RowMajor>(cv::Matx33f(rotation).val);
                                Eigen::Vector3f vfor = _t.col(2).normalized()*100;
                   
-                               geometry_msgs::Pose pose;
-                               pose.position.x = vfor(0);
-                               pose.position.y = vfor(1);
-                               pose.position.z = vfor(2);
-                               posePublisher_.publish(pose);
+                               geometry_msgs::Pose pose_right;
+                               pose_right.position.x = vfor(0);
+                               pose_right.position.y = vfor(1);
+                               pose_right.position.z = vfor(2);
+                               posePublisher_.publish(pose_right);
                                Eigen::Vector3f m = Eigen::Vector3f(cv::Vec3f(translation).val);
-                               currentPos_PnP_R  = newPos_PnP_R ;
+                               currentPos_PnP_R.release();
+                               newTrans3D_PnP_R.release();
+                               currentPos_PnP_R.release();
+                               currentPos_PnP_R  = newPos_PnP_R;
+                               newPos_PnP_R.release();
+                               rotation_PnP_R.release(); 
+                               translation_PnP_R.release();
    #endif
              }
 
@@ -826,12 +837,18 @@ void motionEstimation_node::imageCalc2(const cv::Mat& left, const cv::Mat& right
 
 
            }
+ inliersHorizontal_L1.clear();
+ inliersHorizontal_R1.clear();
+ inliersHorizontal_L2.clear();
+ inliersHorizontal_R2.clear();
  points_L1_temp.clear();
  points_R1_temp.clear();
  points_L1.clear();
  points_R1.clear();
  points_L2.clear();
  points_R2.clear();
+ pointCloud_1.clear();
+ pointCloud_2.clear();
  inliersF_L1.clear();
  inliersF_R1.clear();
  image_L1.release();
@@ -840,9 +857,33 @@ void motionEstimation_node::imageCalc2(const cv::Mat& left, const cv::Mat& right
  image_R2.release();
  inliersF_L2.clear();
  inliersF_R2.clear();
+ F_L.release();
+ F_R.release();
 skipFrameNumber = 0;
          }
-
+    inliersHorizontal_L1.clear();
+    inliersHorizontal_R1.clear();
+    inliersHorizontal_L2.clear();
+    inliersHorizontal_R2.clear();
+    points_L1_temp.clear();
+    points_R1_temp.clear();
+    points_L1.clear();
+    points_R1.clear();
+    points_L2.clear();
+    points_R2.clear();
+    pointCloud_1.clear();
+    pointCloud_2.clear();
+    inliersF_L1.clear();
+    inliersF_R1.clear();
+    image_L1.release();
+    image_R1.release();
+    image_L2.release();
+    image_R2.release();
+    inliersF_L2.clear();
+    inliersF_R2.clear();
+    F_L.release();
+    F_R.release();
+   skipFrameNumber = 0;
 }
 
 void motionEstimation_node::finalize(int s)
