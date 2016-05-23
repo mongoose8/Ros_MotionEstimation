@@ -269,7 +269,7 @@ bool getFundamentalMatrix(vector<cv::Point2f>  const& points1, vector<cv::Point2
 //-----------------------------------------------------------------------------
 void loadIntrinsic(string path, cv::Mat& K_L, cv::Mat& K_R, cv::Mat& distCoeff_L, cv::Mat& distCoeff_R) {
     //-----------------------------------------------------------------------------
-    cv::FileStorage fs(path + "/intrinsic.yml", cv::FileStorage::READ);
+    cv::FileStorage fs("/home/jinhwa/Downloads/MotionEstimation/data/smallDBL/calibration/intrinsic.yml", cv::FileStorage::READ);
     fs["cameraMatrixLeft"] >> K_L;
     fs["cameraMatrixRight"] >> K_R;
     fs["distCoeffsLeft"] >> distCoeff_L;
@@ -280,7 +280,7 @@ void loadIntrinsic(string path, cv::Mat& K_L, cv::Mat& K_R, cv::Mat& distCoeff_L
 //-----------------------------------------------------------------------------
 void loadExtrinsic(string path, cv::Mat& R, cv::Mat& T, cv::Mat& E, cv::Mat& F ) {
     //-----------------------------------------------------------------------------
-    cv::FileStorage fs(path + "/extrinsic.yml", cv::FileStorage::READ);
+    cv::FileStorage fs("/home/jinhwa/Downloads/MotionEstimation/data/smallDBL/calibration/extrinsic.yml", cv::FileStorage::READ);
     fs["R"] >> R;
     fs["T"] >> T;
     fs["E"] >> E;

@@ -5,7 +5,7 @@
 #include "FindPoints.h"
 #include "Triangulation.h"
 #include "Visualisation.h"
-//#include "PointCloudVis.h"
+#include "PointCloudVis.h"
 #include "Utility.h"
 
 #include <cmath>
@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string.h>
 #include <dirent.h>
+
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
@@ -35,5 +36,10 @@ bool motionEstimationPnP (const std::vector<cv::Point2f>& imgPoints,
                           const std::vector<cv::Point3f>& pointCloud_1LR,
                           const cv::Mat& K,
                           cv::Mat& T, cv::Mat& R);
+
+bool motionEstimationPnP_WithoutGuess (const std::vector<cv::Point2f>& imgPoints,
+                                       const std::vector<cv::Point3f>& pointCloud_1LR,
+                                       const cv::Mat& K,
+                                       cv::Mat& T, cv::Mat& R);
 
 #endif // MOTIONESTIMATION_H

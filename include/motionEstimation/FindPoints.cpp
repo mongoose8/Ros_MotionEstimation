@@ -1,28 +1,134 @@
 #include "FindPoints.h"
+#include <set>
+#include <algorithm>
+
+// original version:
 
 vector<cv::Point2f> getStrongFeaturePoints(const cv::Mat& image, int number, float minQualityLevel, float minDistance) {
     /* Shi and Tomasi Feature Tracking! */
 
     /* Preparation: This array will contain the features found in image1. */
     vector<cv::Point2f> image_features;
+    cv::goodFeaturesToTrack(image, image_features, number, minQualityLevel, minDistance, cv::Mat(), 3, true, 0.04);
 
-    /* Preparation: BEFORE the function call this variable is the array size
-     * (or the maximum number of features to find).  AFTER the function call
-     * this variable is the number of features actually found.
-     */
-    int number_of_features = number;
-
-    /* Actually run the Shi and Tomasi algorithm!!
-     * "Image" is the input image.
-     * qualityLevel specifies the minimum quality of the features (based on the eigenvalues)
-     * minDistance specifies the minimum Euclidean distance between features
-     * RETURNS:
-     * "image_features" will contain the feature points.
-     */
-    cv::goodFeaturesToTrack(image, image_features, number_of_features, minQualityLevel, minDistance);
     return image_features;
 }
 
+
+
+// version with a first grid adapted feature detector test
+
+//vector<cv::Point2f> getStrongFeaturePoints(const cv::Mat& image, int number, float minQualityLevel, float minDistance) {
+//    /* Shi and Tomasi Feature Tracking! */
+
+//    /* Preparation: This array will contain the features found in image1. */
+//    // initial used type
+//    vector<cv::Point2f> return_features;
+//    // type used for the detector object
+//    vector<cv::KeyPoint> image_features;
+
+//    float n_tiles = 8;
+
+//    // instantiate detector
+//    cv::Ptr<cv::FeatureDetector> detector;
+//    detector = new cv::GridAdaptedFeatureDetector(new cv::GoodFeaturesToTrackDetector(int(number/n_tiles), minQualityLevel, minDistance, 3, true, 0.04), number, n_tiles, n_tiles);
+
+//    // detect features
+//    detector->detect(image, image_features);
+
+//    // convert result to required type
+//    cv::KeyPoint::convert(image_features, return_features);
+//    return return_features;
+
+//}
+
+// new version using detector object
+vector<cv::Point2f> getFeaturePoints(const cv::Mat& image, const cv::Ptr<cv::FeatureDetector>& detector) {
+
+    vector<cv::Point2f> return_features;
+    // type used for the detector object
+    vector<cv::KeyPoint> image_features;
+
+    detector->detect(image, image_features);
+
+    // convert result to required type
+    cv::KeyPoint::convert(image_features, return_features);
+    return return_features;
+}
+
+// detector object + keypoint history vector
+void getKeyPoints(const cv::Mat& image, const cv::Ptr<cv::FeatureDetector>& detector, std::vector<std::vector<cv::KeyPoint>>& keypoint_history, int n_frames, bool AddToCurrentSet) {
+
+    // result keypoint vector
+    std::vector<cv::KeyPoint> image_features;
+    std::vector<cv::KeyPoint> current_keypoints;//, reduced_set;
+
+    // detect features
+    detector->detect(image, image_features);
+
+    //cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
+    cv::TermCriteria termcrit(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 40, 0.1);
+    cv::Size subPixWinSize(3,3);
+    std::vector<cv::Point2f> imgfeat;
+    cv::KeyPoint::convert(image_features, imgfeat);
+    cv::cornerSubPix(image, imgfeat, subPixWinSize, cv::Size(-1,-1), termcrit);
+    image_features.clear();
+    cv::KeyPoint::convert(imgfeat, image_features);
+
+
+    if (AddToCurrentSet == false){
+        // store keypoints at last position
+        keypoint_history.push_back(image_features);
+    } else {
+
+        int s1 = keypoint_history.size();
+
+        if (s1 != 0){
+
+            current_keypoints = keypoint_history[s1-1];
+            keypoint_history.erase(keypoint_history.end());
+
+        }
+
+        cv::KeyPoint detected, old_one;
+        int s2 = image_features.size();
+        int s3 = current_keypoints.size();
+
+        // loop over all new points in order to find doubeled ones
+        for (int j = 0; j < s2; j++){
+
+            detected = image_features[j];
+
+            bool doubled = false;
+
+            // point doubled?
+            for(int k = 0; k < s3; k++){
+
+                old_one = current_keypoints[k];
+
+                if ( fabs(detected.pt.x - old_one.pt.x ) < 5 && fabs(detected.pt.y - old_one.pt.y ) < 5 ){
+                    doubled = true;
+                    break;
+                }
+            }
+
+            if ( !doubled ){
+                current_keypoints.push_back(image_features[j]);
+            }
+        }
+        // store all remaining points
+        keypoint_history.push_back(current_keypoints);
+    }
+
+
+    // erase keypoints of the oldest frame, if n_frames is exeeded
+    if (keypoint_history.size() > n_frames){
+        keypoint_history.erase(keypoint_history.begin());
+    }
+}
+
+
+// old version for refinding feature points
 void refindFeaturePoints(cv::Mat const& prev_image, cv::Mat const& next_image, vector<cv::Point2f> frame1_features, vector<cv::Point2f> &points1, vector<cv::Point2f> &points2){
     /* Pyramidal Lucas Kanade Optical Flow! */
 
@@ -41,7 +147,7 @@ void refindFeaturePoints(cv::Mat const& prev_image, cv::Mat const& next_image, v
     vector<float> optical_flow_feature_error;
 
     /* This is the window size to use to avoid the aperture problem (see slide "Optical Flow: Overview"). */
-    CvSize optical_flow_window = cvSize(5,5);
+    CvSize optical_flow_window = cvSize(15,15);
 
     /* 0-based maximal pyramid level number; if set to 0, pyramids are not used (single level),
      * if set to 1, two levels are used, and so on; if pyramids are passed to input then algorithm
@@ -55,6 +161,8 @@ void refindFeaturePoints(cv::Mat const& prev_image, cv::Mat const& next_image, v
      */
     cv::TermCriteria optical_flow_termination_criteria
             = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 100, 0.0001 );
+//            = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, number, minDistance );
+
 
     /* Actually run Pyramidal Lucas Kanade Optical Flow!!
      * "prev_image" is the first frame with the known features. pyramid constructed by buildOpticalFlowPyramid()
@@ -87,15 +195,255 @@ void refindFeaturePoints(cv::Mat const& prev_image, cv::Mat const& next_image, v
 }
 
 
+// refinding keypoints
+int refindKeyPoints(cv::Mat const& ref_image, cv::Mat const& new_image, std::vector<std::vector<cv::KeyPoint>>& keypoint_history_ref, std::vector<std::vector<cv::KeyPoint>>& keypoint_history_new, int n_frames) {
+
+    // we need these vorctors since OF PyrLK don't accept keypoint-vectors...
+    vector<cv::Point2f> new_image_points;
+    vector<cv::KeyPoint> new_image_keypoints;
+    vector<cv::Point2f> ref_image_points;
+
+    // convert current keypoints to point2f
+    int s = keypoint_history_ref.size();
+    cv::KeyPoint::convert(keypoint_history_ref[s-1], ref_image_points);
+
+    vector<unsigned char> optical_flow_found_feature;
+    vector<float> optical_flow_feature_error;
+    CvSize optical_flow_window = cvSize(15,15);
+    int maxLevel = 10;
+
+    cv::TermCriteria optical_flow_termination_criteria
+            = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 100, 0.0001 );
+
+    cv::calcOpticalFlowPyrLK(ref_image, new_image, ref_image_points, new_image_points, optical_flow_found_feature,
+                             optical_flow_feature_error, optical_flow_window, maxLevel,
+                             optical_flow_termination_criteria, cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
+
+    int n_found = 0;
+    for (int i = 0; i < new_image_points.size(); i++){
+
+        if ( optical_flow_found_feature[i] == 1 ){
+
+            if ( new_image_points[i].x <= 0.0 || new_image_points[i].y <= 0.0 || ref_image_points[i].x <= 0.0 || ref_image_points[i].y <= 0.0){
+                new_image_points[i].x = -1.0;
+                new_image_points[i].y = -1.0;
+            }else{
+                n_found++;
+            }
+        } else{
+            new_image_points[i].x = -1.0;
+            new_image_points[i].y = -1.0;
+        }
+    }
+
+    // convert result back to keypoints
+    cv::KeyPoint::convert(new_image_points, new_image_keypoints);
+
+    // store keypoints at first position
+    keypoint_history_new.push_back(new_image_keypoints);
+
+    // erase keypoints of the oldest frame, if n_frames is exeeded
+    if (keypoint_history_new.size() > n_frames){
+        keypoint_history_new.erase(keypoint_history_new.begin());
+    }
+    return n_found;
+}
+
+
+int refindKeyPoints(cv::Mat const& ref_image, cv::Mat const& new_image, std::vector<std::vector<cv::KeyPoint>>& keypoint_history_ref, std::vector<std::vector<cv::KeyPoint>>& keypoint_history_new, int n_frames, std::vector<cv::DMatch>& matches){
+
+    // we need these vorctors since OF PyrLK don't accept keypoint-vectors...
+    vector<cv::Point2f> new_image_points;
+    vector<cv::Point2f> result_image_points;
+
+    vector<cv::KeyPoint> new_image_keypoints;
+    vector<cv::Point2f> ref_image_points;
+
+    // convert current keypoints to point2f
+    int s = keypoint_history_ref.size();
+    cv::KeyPoint::convert(keypoint_history_ref[s-1], ref_image_points);
+
+    vector<unsigned char> optical_flow_found_feature;
+    vector<float> optical_flow_feature_error;
+    CvSize optical_flow_window = cvSize(15,15);
+    int maxLevel = 10;
+
+    int co = new_image.cols;
+    int ro = new_image.rows;
+
+
+    cv::TermCriteria optical_flow_termination_criteria
+            = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 100, 0.0001 );
+
+    cv::calcOpticalFlowPyrLK(ref_image, new_image, ref_image_points, new_image_points, optical_flow_found_feature,
+                             optical_flow_feature_error, optical_flow_window, maxLevel,
+                             optical_flow_termination_criteria, cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
+
+    int n_found = 0;
+    for (int i = 0; i < new_image_points.size(); i++){
+
+        if ( optical_flow_found_feature[i] == 1 ){
+
+            if ( new_image_points[i].x <= 0.0 || new_image_points[i].y <= 0.0 ||
+                 ref_image_points[i].x <= 0.0 || ref_image_points[i].y <= 0.0 ||
+                 new_image_points[i].x >= co  || new_image_points[i].y >= ro  ||
+                 ref_image_points[i].x >= co  || ref_image_points[i].y >= co  ){
+                new_image_points[i].x = -1.0;
+                new_image_points[i].y = -1.0;
+            }else{
+
+                matches.push_back(cv::DMatch(i, n_found, 0.0) );
+                result_image_points.push_back(new_image_points[i]);
+                n_found++;
+            }
+        } else{
+            new_image_points[i].x = -1.0;
+            new_image_points[i].y = -1.0;
+        }
+    }
+
+    // convert result back to keypoints
+    cv::KeyPoint::convert(result_image_points, new_image_keypoints);
+
+    // store keypoints at first position
+    keypoint_history_new.push_back(new_image_keypoints);
+
+    // erase keypoints of the oldest frame, if n_frames is exeeded
+    if (keypoint_history_new.size() > n_frames){
+        keypoint_history_new.erase(keypoint_history_new.begin());
+    }
+    return n_found;
+}
+
+
+
+
+int refindKeyPoints(cv::Mat const& ref_image, cv::Mat const& new_image, std::vector<std::vector<cv::KeyPoint>>& keypoint_history, int n_frames){
+
+    // we need these vorctors since OFPyrLK don't accept keypoint-vectors...
+    vector<cv::Point2f> new_image_points;
+    vector<cv::KeyPoint> new_image_keypoints;
+    vector<cv::Point2f> ref_image_points;
+
+    // convert current keypoints to point2f
+    int s = keypoint_history.size();
+    cv::KeyPoint::convert(keypoint_history[s-1], ref_image_points);
+
+    vector<unsigned char> optical_flow_found_feature;
+    vector<float> optical_flow_feature_error;
+    CvSize optical_flow_window = cvSize(15,15);
+    int maxLevel = 10;
+
+    cv::TermCriteria optical_flow_termination_criteria
+            = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 100, 0.0001 );
+
+    cv::calcOpticalFlowPyrLK(ref_image, new_image, ref_image_points, new_image_points, optical_flow_found_feature,
+                             optical_flow_feature_error, optical_flow_window, maxLevel,
+                             optical_flow_termination_criteria, cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
+
+    int n_found = 0;
+    for (int i = 0; i < new_image_points.size(); i++){
+        if ( optical_flow_found_feature[i] == 1 ){
+
+            if ( new_image_points[i].x <= 0.0 || new_image_points[i].y <= 0.0 || ref_image_points[i].x <= 0.0 || ref_image_points[i].y <= 0.0){
+                new_image_points[i].x = -1.0;
+                new_image_points[i].y = -1.0;
+            }else{
+                n_found++;
+            }
+        } else{
+            new_image_points[i].x = -1.0;
+            new_image_points[i].y = -1.0;
+        }
+    }
+
+    // convert result back to keypoints
+    cv::KeyPoint::convert(new_image_points, new_image_keypoints);
+
+    // store keypoints at first position
+    keypoint_history.push_back(new_image_keypoints);
+
+    // erase keypoints of the oldest frame, if n_frames is exeeded
+    if (keypoint_history.size() > n_frames){
+        keypoint_history.erase(keypoint_history.begin());
+    }
+    return n_found;
+}
+
+
+
+
+int refindKeyPoints(cv::Mat const& ref_image, cv::Mat const& new_image, std::vector<std::vector<cv::KeyPoint>>& keypoint_history, int n_frames, std::vector<cv::DMatch>& matches){
+
+    // we need these vorctors since OFPyrLK don't accept keypoint-vectors...
+    vector<cv::Point2f> new_image_points;
+    vector<cv::Point2f> result_image_points;
+
+    vector<cv::KeyPoint> new_image_keypoints;
+    vector<cv::Point2f> ref_image_points;
+
+    // convert current keypoints to point2f
+    int s = keypoint_history.size();
+    cv::KeyPoint::convert(keypoint_history[s-1], ref_image_points);
+
+    vector<unsigned char> optical_flow_found_feature;
+    vector<float> optical_flow_feature_error;
+    CvSize optical_flow_window = cvSize(15,15);
+    int maxLevel = 10;
+
+    cv::TermCriteria optical_flow_termination_criteria
+            = cv::TermCriteria( cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 100, 0.0001 );
+
+    cv::calcOpticalFlowPyrLK(ref_image, new_image, ref_image_points, new_image_points, optical_flow_found_feature,
+                             optical_flow_feature_error, optical_flow_window, maxLevel,
+                             optical_flow_termination_criteria, cv::OPTFLOW_LK_GET_MIN_EIGENVALS);
+
+    int n_found = 0;
+    for (int i = 0; i < new_image_points.size(); i++){
+        if ( optical_flow_found_feature[i] == 1 ){
+
+            if ( new_image_points[i].x <= 0.0 || new_image_points[i].y <= 0.0 || ref_image_points[i].x <= 0.0 || ref_image_points[i].y <= 0.0){
+                new_image_points[i].x = -1.0;
+                new_image_points[i].y = -1.0;
+            }else{
+
+                matches.push_back(cv::DMatch(i, n_found, 0.0) );
+                result_image_points.push_back(new_image_points[i]);
+                n_found++;
+            }
+        } else{
+            new_image_points[i].x = -1.0;
+            new_image_points[i].y = -1.0;
+        }
+    }
+
+    // convert result back to keypoints
+    cv::KeyPoint::convert(result_image_points, new_image_keypoints);
+
+    // store keypoints at first position
+    keypoint_history.push_back(new_image_keypoints);
+
+    // erase keypoints of the oldest frame, if n_frames is exeeded
+    if (keypoint_history.size() > n_frames){
+        keypoint_history.erase(keypoint_history.begin());
+    }
+    return n_found;
+}
+
+
+
+
+
+
 void fastFeatureMatcher(const cv::Mat& frame_L1, const cv::Mat& frame_R1, const cv::Mat& frame_L2, const cv::Mat& frame_R2, vector<cv::Point2f> &points_L1, vector<cv::Point2f>& points_R1, vector<cv::Point2f> &points_L2, vector<cv::Point2f> &points_R2) {
     vector<cv::DMatch> matches;
 
     vector<cv::KeyPoint>left_keypoints,right_keypoints;
 
     // Detect keypoints in the left and right images
-    cv::FastFeatureDetector ffd;
-    ffd.detect(frame_L1, left_keypoints);
-    ffd.detect(frame_R1, right_keypoints);
+    cv::FastFeatureDetector *ffd;
+    ffd->detect(frame_L1, left_keypoints);
+    ffd->detect(frame_R1, right_keypoints);
 
     vector<cv::Point2f>left_points;
     KeyPointsToPoints(left_keypoints,left_points);
@@ -178,9 +526,9 @@ void fastFeatureMatcher(const cv::Mat& frame_L1, const cv::Mat& frame_R1, const 
     cout<<"pruned "<< matches.size() <<" / "<<nearest_neighbors.size() <<" matches"<<endl;
 
     cv::Mat img_out;
-  //  cv::drawMatches(frame_L1, left_keypoints, frame_R1, right_keypoints, matches, img_out);
-  //  cv::imshow("test fast matches", img_out);
-  //  cv::waitKey(30);
+    cv::drawMatches(frame_L1, left_keypoints, frame_R1, right_keypoints, matches, img_out);
+    cv::imshow("test fast matches", img_out);
+    cv::waitKey();
 }
 
 void getInliersFromMedianValue (const pair<vector<cv::Point2f>, vector<cv::Point2f> >& features, vector<cv::Point2f> &inliers1, vector<cv::Point2f> &inliers2){
@@ -217,24 +565,13 @@ void getInliersFromMedianValue (const pair<vector<cv::Point2f>, vector<cv::Point
 }
 
 void getInliersFromHorizontalDirection (const pair<vector<cv::Point2f>, vector<cv::Point2f> >& features, vector<cv::Point2f> &inliers1, vector<cv::Point2f> &inliers2){
-    vector<float> lengths;
-
-    for (unsigned int j = 0; j < features.first.size(); ++j){
-        float length = sqrt( std::pow((features.first[j].y - features.second[j].y),2) + std::pow((features.first[j].x - features.second[j].x),2) );
-        lengths.push_back(length);
-    }
-
-    sort(lengths.begin(),lengths.end());
-    float median_lenght = lengths[(int)(lengths.size()/2)];
-
 
     for(unsigned int i = 0; i < features.first.size(); ++i)
     {
         float direction = atan2( (float) (features.first[i].y - features.second[i].y) , (float) (features.first[i].x - features.second[i].x) ) * 180 / M_PI ;
-        float length = sqrt( std::pow((features.first[i].y - features.second[i].y),2) + std::pow((features.first[i].x - features.second[i].x),2) );
 
-        // ignore points with length < 10 pixels.. and take inlier if angle < 10 degree
-        if ((length < (median_lenght * 2) && length > (median_lenght * 0.5) && fabs(direction) < 10 ) || fabs(length) < 10 ) {
+        // ignore points if angle > 10 degree
+        if ( fabs(direction) < 10 ) {
             //std::cout << i << ":  " << direction << "     length: " << length  << "   POS: [" << features.first[i].x << ", " << features.first[i].y << "]" << std::endl;
             inliers1.push_back(features.first[i]);
             inliers2.push_back(features.second[i]);
@@ -245,6 +582,56 @@ void getInliersFromHorizontalDirection (const pair<vector<cv::Point2f>, vector<c
         }
     }
 }
+
+
+void IdentifyKeypointsEpipolarConstraint(std::vector<cv::KeyPoint>& keypoint_history_left, std::vector<cv::KeyPoint>& keypoint_history_right, int thresh){
+
+    for(unsigned int i = 0; i < keypoint_history_left.size(); ++i){
+
+        //float direction = atan2( (float) (keypoint_history_left[i].pt.y - keypoint_history_right[i].pt.y) , (float) (keypoint_history_left[i].pt.x - keypoint_history_right[i].pt.x) ) * 180 / M_PI ;
+
+        if ( fabs(keypoint_history_left[i].pt.y-keypoint_history_right[i].pt.y ) > thresh ){
+        //if ( fabs(direction ) > 10 ){
+            keypoint_history_left[i].pt.x = -1.0;
+            keypoint_history_left[i].pt.y = -1.0;
+            keypoint_history_right[i].pt.x = -1.0;
+            keypoint_history_right[i].pt.y = -1.0;
+        }
+    }
+}
+
+
+
+//void getInliersFromHorizontalDirection (const pair<vector<cv::Point2f>, vector<cv::Point2f> >& features, vector<cv::Point2f> &inliers1, vector<cv::Point2f> &inliers2){
+//    vector<float> lengths;
+
+//    for (unsigned int j = 0; j < features.first.size(); ++j){
+//        float length = sqrt( std::pow((features.first[j].y - features.second[j].y),2) + std::pow((features.first[j].x - features.second[j].x),2) );
+//        lengths.push_back(length);
+//    }
+
+//    sort(lengths.begin(),lengths.end());
+//    float median_lenght = lengths[(int)(lengths.size()/2)];
+
+
+//    for(unsigned int i = 0; i < features.first.size(); ++i)
+//    {
+//        float direction = atan2( (float) (features.first[i].y - features.second[i].y) , (float) (features.first[i].x - features.second[i].x) ) * 180 / M_PI ;
+//        float length = sqrt( std::pow((features.first[i].y - features.second[i].y),2) + std::pow((features.first[i].x - features.second[i].x),2) );
+
+//        // ignore points with length < 10 pixels.. and take inlier if angle < 10 degree
+//        if ((length < (median_lenght * 2) && length > (median_lenght * 0.5) && fabs(direction) < 10 ) || fabs(length) < 10 ) {
+//            //std::cout << i << ":  " << direction << "     length: " << length  << "   POS: [" << features.first[i].x << ", " << features.first[i].y << "]" << std::endl;
+//            inliers1.push_back(features.first[i]);
+//            inliers2.push_back(features.second[i]);
+//        } else {
+//            //std::cout << i << ":  " << direction << "     length: " << length << "   POS: [" << features.first[i].x << ", " << features.first[i].y << "]" << "   FAILS" << std::endl;
+//            inliers1.push_back(cv::Point2f(0,0));
+//            inliers2.push_back(cv::Point2f(0,0));
+//        }
+//    }
+//}
+
 
 
 void deleteUnvisiblePoints(vector<cv::Point2f>& points1L, vector<cv::Point2f>& points1La, vector<cv::Point2f>& points1R, vector<cv::Point2f>& points1Ra, vector<cv::Point2f>& points2L, vector<cv::Point2f>& points2R, int resX, int resY){
@@ -386,6 +773,90 @@ void deleteZeroLines(vector<cv::Point2f>& points1L, vector<cv::Point2f>& points1
     }
 }
 
+int DeleteKeypoints(vector<cv::KeyPoint>& points1L, vector<cv::KeyPoint>& points1R,
+                     vector<cv::KeyPoint>& points2L, vector<cv::KeyPoint>& points2R){
+    int size = points1L.size();
+    int counter = size;
+
+    vector<cv::KeyPoint>::iterator iter_p1L = points1L.begin();
+    vector<cv::KeyPoint>::iterator iter_p1R = points1R.begin();
+    vector<cv::KeyPoint>::iterator iter_p2L  = points2L.begin();
+    vector<cv::KeyPoint>::iterator iter_p2R  = points2R.begin();
+    for (unsigned int i = 0; i < size; ++i) {
+        if ((0.0 >= points1L[iter_p1L-points1L.begin()].pt.x || 0.0 >= points1L[iter_p1L-points1L.begin()].pt.y) ||
+                (0.0 >= points1R[iter_p1R-points1R.begin()].pt.x || 0.0 >= points1R[iter_p1R-points1R.begin()].pt.y) ||
+                (0.0 >= points2L[iter_p2L-points2L.begin()].pt.x || 0.0 >= points2L[iter_p2L-points2L.begin()].pt.y) ||
+                (0.0 >= points2R[iter_p2R-points2R.begin()].pt.x || 0.0 >= points2R[iter_p2R-points2R.begin()].pt.y))
+        {
+            points1L.erase(iter_p1L);
+            points1R.erase(iter_p1R);
+            points2L.erase(iter_p2L);
+            points2R.erase(iter_p2R);
+            counter--;
+        } else {
+            ++iter_p1L ;
+            ++iter_p1R ;
+            ++iter_p2L  ;
+            ++iter_p2R  ;
+        }
+    }
+    return counter;
+}
+
+int DeleteFeaturepoints(vector<cv::Point2f>& points1L, vector<cv::Point2f>& points1R,
+                     vector<cv::Point2f>& points2L, vector<cv::Point2f>& points2R){
+    int size = points1L.size();
+    int counter = size;
+
+    vector<cv::Point2f>::iterator iter_p1L = points1L.begin();
+    vector<cv::Point2f>::iterator iter_p1R = points1R.begin();
+    vector<cv::Point2f>::iterator iter_p2L  = points2L.begin();
+    vector<cv::Point2f>::iterator iter_p2R  = points2R.begin();
+    for (unsigned int i = 0; i < size; ++i) {
+        if ((0.0 >= points1L[iter_p1L-points1L.begin()].x || 0.0 >= points1L[iter_p1L-points1L.begin()].y) ||
+                (0.0 >= points1R[iter_p1R-points1R.begin()].x || 0.0 >= points1R[iter_p1R-points1R.begin()].y) ||
+                (0.0 >= points2L[iter_p2L-points2L.begin()].x || 0.0 >= points2L[iter_p2L-points2L.begin()].y) ||
+                (0.0 >= points2R[iter_p2R-points2R.begin()].x || 0.0 >= points2R[iter_p2R-points2R.begin()].y))
+        {
+            points1L.erase(iter_p1L);
+            points1R.erase(iter_p1R);
+            points2L.erase(iter_p2L);
+            points2R.erase(iter_p2R);
+            counter--;
+        } else {
+            ++iter_p1L ;
+            ++iter_p1R ;
+            ++iter_p2L  ;
+            ++iter_p2R  ;
+        }
+    }
+    return counter;
+}
+
+
+
+
+
+
+
+void DeleteKeypoints(vector<cv::KeyPoint>& points1, vector<cv::KeyPoint>& points2){
+    int size = points1.size();
+    vector<cv::KeyPoint>::iterator iter_p1 = points1.begin();
+    vector<cv::KeyPoint>::iterator iter_p2 = points2.begin();
+    for (unsigned int i = 0; i < size; ++i) {
+        if ((-1 == points1[iter_p1-points1.begin()].pt.x && -1 == points1[iter_p1-points1.begin()].pt.y) ||
+                (-1 == points2[iter_p2-points2.begin()].pt.x && -1 == points2[iter_p2-points2.begin()].pt.y)){
+            points1.erase(iter_p1);
+            points2.erase(iter_p2);
+        } else {
+            ++iter_p1;
+            ++iter_p2;
+        }
+    }
+}
+
+
+
 void deleteZeroLines(vector<cv::Point2f>& points1La, vector<cv::Point2f>& points1Lb,
                      vector<cv::Point2f>& points1Ra, vector<cv::Point2f>& points1Rb,
                      vector<cv::Point2f>& points2La, vector<cv::Point2f>& points2Lb,
@@ -506,3 +977,87 @@ void normalizePoints(const cv::Mat& KLInv, const cv::Mat& KRInv, const vector<cv
     cv::convertPointsFromHomogeneous(points_Lh, normPoints_L);
     cv::convertPointsFromHomogeneous(points_Rh, normPoints_R);
 }
+
+
+int GetOrderedPointVectorsfromDMachtes(std::vector<std::vector<cv::KeyPoint>>& keypoint_history_left, std::vector<std::vector<cv::KeyPoint>>& keypoint_history_right, vector<cv::DMatch>& M_L1R1, vector<cv::DMatch>& M_L1L2, vector<cv::DMatch>& M_R1R2, vector<cv::DMatch>& M_L2R2, vector<cv::Point2f>& points_L1, vector<cv::Point2f>& points_L2, vector<cv::Point2f>& points_R1, vector<cv::Point2f>& points_R2, int thresh){
+
+    int frame1_index, frame2_index;
+
+    frame2_index = keypoint_history_left.size()-1;
+    frame1_index = frame2_index -1;
+
+    points_L1.clear();
+    points_L2.clear();
+    points_R1.clear();
+    points_R2.clear();
+
+    M_L2R2.clear();
+
+    std::vector<cv::KeyPoint> K_L1 = keypoint_history_left[frame1_index];
+    std::vector<cv::KeyPoint> K_R1 = keypoint_history_right[frame1_index];
+    std::vector<cv::KeyPoint> K_L2 = keypoint_history_left[frame2_index];
+    std::vector<cv::KeyPoint> K_R2 = keypoint_history_right[frame2_index];
+
+    for (std::vector<cv::DMatch>::const_iterator it = M_L1R1.begin(); it!= M_L1R1.end(); ++it){
+
+        // current match in first frame
+        int index_L1 = it->queryIdx;
+        int index_R1 = it->trainIdx;
+
+        int index_L2 = -1, index_R2 = -1;
+
+        // check, if this point was also matched in the two other frames
+        for (std::vector<cv::DMatch>::const_iterator it2 = M_L1L2.begin(); it2!= M_L1L2.end(); ++it2){
+
+            int check = it2->queryIdx;
+            if (check == index_L1){
+                index_L2 = it2->trainIdx;
+                break;
+            }
+        }
+
+        if (index_L2 != -1){
+
+            for (std::vector<cv::DMatch>::const_iterator it3 = M_R1R2.begin(); it3!= M_R1R2.end(); ++it3){
+
+                int check = it3->queryIdx;
+                if (check == index_R1){
+                    index_R2 = it3->trainIdx;
+                    break;
+                }
+            }
+        }
+
+        // if the point was identified in all 4 frames:
+        if (index_L2 != -1 && index_R2 != -1){
+
+            // get the corresponding coordinates
+            float x_L1 = K_L1[index_L1].pt.x;
+            float y_L1 = K_L1[index_L1].pt.y;
+
+            float x_R1 = K_R1[index_R1].pt.x;
+            float y_R1 = K_R1[index_R1].pt.y;
+
+            float x_L2 = K_L2[index_L2].pt.x;
+            float y_L2 = K_L2[index_L2].pt.y;
+
+            float x_R2 = K_R2[index_R2].pt.x;
+            float y_R2 = K_R2[index_R2].pt.y;
+
+            // check the epipolar constraint
+            if ( (fabs(y_L1 - y_R1) < thresh) && (fabs(y_L2 - y_R2) < thresh) ){
+
+                // and take this point for frame-to-frame-vo
+                points_L1.push_back(cv::Point2f(x_L1,y_L1));
+                points_R1.push_back(cv::Point2f(x_R1,y_R1));
+                points_L2.push_back(cv::Point2f(x_L2,y_L2));
+                points_R2.push_back(cv::Point2f(x_R2,y_R2));
+
+                M_L2R2.push_back(cv::DMatch(index_L2, index_R2, 0.0));
+            }
+        }
+    }
+    return points_L1.size();
+}
+
+

@@ -75,7 +75,7 @@ void drawHomographyPoints(cv::Mat frame1, cv::Mat frame2, vector<cv::Point2f> co
     std::vector<uchar>::const_iterator itIn= inliers_homographie.begin();
 
     cout << "Homography:  " << points1.size() << " " << points1.size() << endl;
-  /*  while (itPts!=points1.end()){
+    while (itPts!=points1.end()){
 
         // draw a circle at each inlier location
         if (*itIn)
@@ -86,33 +86,33 @@ void drawHomographyPoints(cv::Mat frame1, cv::Mat frame2, vector<cv::Point2f> co
 
         ++itPts;
         ++itIn;
-    }*/
+    }
 
     itPts= points2.begin();
     itIn= inliers_homographie.begin();
-  /*  while (itPts!=points2.end()) {
+    while (itPts!=points2.end()) {
 
         // draw a circle at each inlier location
         if (*itIn)
-          cv::circle(mat_color2,*itPts,3,cv::Scalar(0,255,0),2);
+            cv::circle(mat_color2,*itPts,3,cv::Scalar(0,255,0),2);
         else {
             cv::circle(mat_color2,*itPts,3,cv::Scalar(0,0,255),2);
         }
 
         ++itPts;
         ++itIn;
-    }*/
+    }
 
     // Display the images with points
- //  cv::namedWindow("Right Image Homography (RANSAC)", cv::WINDOW_NORMAL);
-//   cv::imshow("Right Image Homography (RANSAC)",mat_color1);
-//   cv::namedWindow("Left Image Homography (RANSAC)", cv::WINDOW_NORMAL);
-//   cv::imshow("Left Image Homography (RANSAC)",mat_color2);
+    cv::namedWindow("Right Image Homography (RANSAC)", cv::WINDOW_NORMAL);
+    cv::imshow("Right Image Homography (RANSAC)",mat_color1);
+    cv::namedWindow("Left Image Homography (RANSAC)", cv::WINDOW_NORMAL);
+    cv::imshow("Left Image Homography (RANSAC)",mat_color2);
 
     // SAVE IMAGEs
     //string path = "data/image/epipoles/current"+(to_string(frame))+".png";
     //imwrite(path.c_str(), mat_image1);
-//    cv::waitKey(70);
+    //cv::waitKey();
 }
 
 void drawEpipolarLines(cv::Mat frame1, const vector<cv::Point2f>& points1, cv::Mat F) {
@@ -143,8 +143,8 @@ void drawEpipolarLines(cv::Mat frame1, const vector<cv::Point2f>& points1, cv::M
     }
 
     // Display the images with points
-//    cv::imshow("Image Epilines (RANSAC)",frame1);
-//    cv::waitKey(70);
+    cv::imshow("Image Epilines (RANSAC)",frame1);
+    cv::waitKey(1);
 }
 
 
@@ -154,20 +154,20 @@ void drawCorresPoints(const cv::Mat& image, const vector<cv::Point2f>& inliers1,
     cv::Mat color_image;
     cv::cvtColor(image, color_image, CV_GRAY2RGB);
 
-  //  int fontFace = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
-  //  float fontScale = 0.4;
-  //  int thickness = 1;
+    int fontFace = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
+    float fontScale = 0.4;
+    int thickness = 1;
 
- /*   for(unsigned int i = 0; i < inliers1.size(); i++)
+    for(unsigned int i = 0; i < inliers1.size(); i++)
     {
         float angle;		angle = atan2( (float) inliers1[i].y - inliers2[i].y, (float) inliers1[i].x - inliers2[i].x );
-   //     drawLine(color_image, inliers1[i], inliers2[i], angle, CV_RGB(color[0], color[1], color[2]));
+        drawLine(color_image, inliers1[i], inliers2[i], angle, CV_RGB(color[0], color[1], color[2]));
         //cv::Point2f point (0.5*(inliers2[i] - inliers1[i]) );
-   //     cv::putText (color_image, to_string(i), inliers1[i] , fontFace, fontScale, CV_RGB(color[2], color[1], color[0]), thickness);
-    }*/
+        cv::putText (color_image, to_string(i), inliers1[i] , fontFace, fontScale, CV_RGB(color[2], color[1], color[0]), thickness);
+    }
 
-  //  cv::imshow(name, color_image);
-  //  cv::waitKey(70);
+    cv::imshow(name, color_image);
+    cv::waitKey(1);
 }
 
 void drawCorresPointsRef(cv::Mat& image, const vector<cv::Point2f>& inliers1, const vector<cv::Point2f>& inliers2, string name, cv::Scalar const& color) {
@@ -179,13 +179,13 @@ void drawCorresPointsRef(cv::Mat& image, const vector<cv::Point2f>& inliers1, co
     for(unsigned int i = 0; i < inliers1.size(); i++)
     {
         float angle;		angle = atan2( (float) inliers1[i].y - inliers2[i].y, (float) inliers1[i].x - inliers2[i].x );
-   //     drawLine(image, inliers1[i], inliers2[i], angle, CV_RGB(color[0], color[1], color[2]));
+        drawLine(image, inliers1[i], inliers2[i], angle, CV_RGB(color[0], color[1], color[2]));
         //cv::Point2f point (0.5*(inliers2[i] - inliers1[i]) );
         //cv::putText (image, to_string(i), inliers1[i] , fontFace, fontScale, CV_RGB(color[2], color[1], color[0]), thickness);
     }
 
-//    cv::imshow(name, image);
-//    cv::waitKey(70);
+    cv::imshow(name, image);
+    cv::waitKey(1);
 }
 
 void drawLine (cv::Mat &ref, cv::Point2f p, cv::Point2f q, float angle, const cv::Scalar& color, int line_thickness ) {
@@ -233,23 +233,22 @@ void drawPoints (cv::Mat image, vector<cv::Point2f> points, string windowName, c
     cv::cvtColor(image, colorImg, CV_GRAY2RGB);
 
     int fontFace = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
-    float fontScale = 0.5;
+    float fontScale = 0.25;
     int thickness = 1;
 
     for (unsigned int i = 0; i<points.size(); ++i) {
         // draw a circle at each inlier location
-    //    cv::circle(colorImg,points[i],3,color,1);
-    //    cv::putText (colorImg, to_string(i), points[i] , fontFace, fontScale, color, thickness);
+        cv::circle(colorImg,points[i],3,color,1);
+        cv::putText (colorImg, to_string(i), points[i] , fontFace, fontScale, color, thickness);
     }
-  //  cv::imshow(windowName, colorImg);
-//    cv::waitKey(70);
+    cv::imshow(windowName, colorImg);
 }
 
 cv::Point2f drawCameraPath(cv::Mat& img, const cv::Point2f prevPos, const cv::Mat& T, string name, cv::Scalar const& color){
     cv::Point3f pos3D(T);
     cv::Point2f Pos2D(prevPos.x + pos3D.x, prevPos.y + pos3D.y);
-  //  cv::line(img, prevPos, Pos2D, color);
- //   cv::imshow(name, img);
- //   cv::waitKey(70);
- //   return Pos2D;
+    cv::line(img, prevPos, Pos2D, color);
+    cv::imshow(name, img);
+
+    return Pos2D;
 }

@@ -25,7 +25,9 @@ void PointsToKeyPoints(const std::vector<cv::Point2f>& ps, std::vector<cv::KeyPo
 void decomposeRotMat(const cv::Mat& R, float& x, float& y, float& z);
 bool calcCoordinate(cv::Mat_<float> &toReturn,cv::Mat const& Q, cv::Mat const& disparityMap,int x,int y);
 
-
 void rotateRandT(cv::Mat& Trans, cv::Mat& Rot);
+
+void read_tsukuba_line(std::string line, cv::Mat_<float> &pos_gt, cv::Mat_<float> &r_gt, cv::Mat_<float> &R_gt);
+void read_kitti_line(std::string line, cv::Mat_<float> &pos_gt, cv::Mat_<float> &r_gt, cv::Mat_<float> &R_gt);
 
 #endif // UTILITY_H

@@ -18,8 +18,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(PCL 1.7 REQUIRED COMPONENTS common io)
-#include_directories(include  ${PCL_INCLUDE_DIRS})
+find_package(PCL 1.7 REQUIRED COMPONENTS common io)
+include_directories(include  ${PCL_INCLUDE_DIRS})
  find_package( OpenCV REQUIRED COMPONENTS)
 include_directories(include ${OpenCV_INCLUDE_DIRS} )
 find_package(Eigen REQUIRED COMPONENTS)
@@ -113,7 +113,8 @@ include_directories(include
 ## Declare a cpp library
 add_library(motion
   include/motionEstimation/FindCameraMatrices.cpp include/motionEstimation/FindCameraMatrices.h include/motionEstimation/FindPoints.cpp include/motionEstimation/FindPoints.h include/motionEstimation/MotionEstimation.cpp  include/motionEstimation/MotionEstimation.h include/motionEstimation/Triangulation.cpp include/motionEstimation/Triangulation.h include/motionEstimation/Utility.cpp include/motionEstimation/Utility.h include/motionEstimation/Visualisation.cpp include/motionEstimation/Visualisation.h
-  src/container.h)
+  src/container.h include/motionEstimation/evaluate_odometry.cpp include/motionEstimation/evaluate_odometry.h include/motionEstimation/matrix.h include/motionEstimation/matrix.cpp include/motionEstimation/_modelest.h include/motionEstimation/precomp.hpp include/motionEstimation/precomp.cpp include/motionEstimation/Rpoly.h include/motionEstimation/Rpoly.cpp include/motionEstimation/5point.h include/motionEstimation/5point.cpp include/motionEstimation/FivePointSolver.cpp include/motionEstimation/Mblock.h include/motionEstimation/Polynomial.h
+   include/motionEstimation/PointCloudVis.h include/motionEstimation/PointCloudVis.h include/motionEstimation/five-point.hpp include/motionEstimation/five-point.cpp)
 
 ## Declare a cpp executable
 add_executable(motionEstimation_node src/motionEstimation_node.cpp src/motionEstimation_node.h src/main.cpp)
@@ -123,9 +124,10 @@ add_executable(motionEstimation_node src/motionEstimation_node.cpp src/motionEst
 add_dependencies(motionEstimation_node motionEstimation_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(motionEstimation_node
-    motion ${catkin_LIBRARIES}   ${Eigen_LIBRARIES}
+ target_link_libraries(motion
+    ${catkin_LIBRARIES}   ${Eigen_LIBS} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES}
  )
+ target_link_libraries(motionEstimation_node motion  ${catkin_LIBRARIES}   ${Eigen_LIBS})
 
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 

@@ -12,7 +12,10 @@
 #include "motionEstimation/Visualisation.h"
 #include "motionEstimation/FindPoints.h"
 #include "motionEstimation/MotionEstimation.h"
-
+#include "motionEstimation/evaluate_odometry.h"
+#include "motionEstimation/5point.h"
+#include "motionEstimation/five-point.hpp"
+#include <opencv2/imgproc/imgproc.hpp>
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -24,7 +27,7 @@
 #include <motionEstimation/srvSub.h>
 #include <motionEstimation/msg_motion.h>
 #include <image_transport/subscriber_filter.h>
-
+#include <fstream>
 #include <sensor_msgs/Image.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -111,6 +114,48 @@ motionEstimation::msg_motion msg;
 polled_camera::GetPolledImage::Request req;
 polled_camera::GetPolledImage::Response rsp;
 ros::ServiceClient client1;
+int current_n_keypoints; // current number of valid keypoints
+int initial_n_keypoints; // number of keypoints at the beginning of each local sequence
+int n_keypoint_history; // number of frames for which points will be tracked
+int local_frame_index; // local index or the current frame for which keypoints will be found
+int n_keypoints_found; // Number of found keypoints
+int epipolar_thresh;
+int dataset = 0, plot_point_clouds = 0, dataset_number = 0, n_features = 300;
+int min_dist = 10, max_skipframes = 5, evaluation = 0, init_guess = 0, num_iter = 1, use_nister = 1;
+int use_bucketing = 0, max_total_keypoints = 500, n_tiles_x=5, n_tiles_y=5, use_adjusterAdapter = 0;
+float min_quality = 0.001, ransac_threshold = 0.01;
+std::string feature_detector_type, dataPath, gtpath, dataset_name;
+std::string feature_descriptor_type, feature_matcher_type;
+int nOctaves = 4, n_bytes = 32, fast_intensity_threshold = 10;
+float patternScale = 22.0;
+int star_maxSize=16, star_responseThreshold=30, star_lineThresholdProjected = 10, star_lineThresholdBinarized=8, star_suppressNonmaxSize=5;
+double starAdj_initThresh, starAdj_minThresh, starAdj_maxThresh;
+bool orientationNormalized = true, scaleNormalized = true, fast_nonmaxSuppression = false;
+int orb_nLevels, orb_edgeThreshold, orb_firstLevel, orb_WTA_k, orb_patchSize;
+float orb_scaleFactor;
+int brisk_thresh, brisk_octaves;
+float brisk_patternScale;
+int keyframe_selection_method, init_with_zero_keypoints;
+int event_control;
+std::string line;
+cv::Mat_<float> pos_gt_f1, r_gt_f1, R_gt_f1; // pose of frame 1
+cv::Mat_<float> pos_gt_f2, r_gt_f2, R_gt_f2; // pose of frame 2
+std::ifstream input_file;
+std::ofstream gt_file;
+cv::Mat descriptors_L1, descriptors_R1, descriptors_L2, descriptors_R2;
+vector<DMatch> matches_L1R1, matches_L1L2, matches_R1R2, matches_L2R2;
+clock_t time, start;
+cv::Ptr<cv::DescriptorMatcher> Descriptor_Matcher;
+std::vector<std::vector<cv::KeyPoint>> keypoint_history_left;
+std::vector<std::vector<cv::KeyPoint>> keypoint_history_right;
+cv::Ptr<cv::DescriptorExtractor> Descriptor_Extractor;
+cv::Ptr<cv::FeatureDetector> Feature_Detector;
+cv::Ptr<cv::AdjusterAdapter> Adapter;
+float factor = 1.0/1000.0;
+string name, folder;
+ofstream result_file;
+bool imgcal = false;
+
 };
 
 

@@ -94,7 +94,8 @@ void rotatePointCloud(std::vector<cv::Point3f>& cloud, const cv::Mat P){
         cv::Mat point(i);
         point.convertTo(point, R.type());
 
-        cv::Mat newPoint = R * point + T;
+        //cv::Mat newPoint = R * (T + point);
+        cv::Mat newPoint = R * point +T;
         i = cv::Point3f(newPoint);
     }
 }
@@ -140,4 +141,127 @@ bool calcCoordinate(cv::Mat_<float> &toReturn,cv::Mat const& Q, cv::Mat const& d
       return false;
     }
 }
+
+
+void read_tsukuba_line(std::string line, cv::Mat_<float> &pos_gt, cv::Mat_<float> &r_gt, cv::Mat_<float> &R_gt)
+{
+
+    // z and y have to be mirrored --> rotation of 180 degrees around x!
+
+    std::string::size_type sz;
+    std::string::size_type size = 0;
+    float x,y,z,a,b,c;
+
+    // position
+ /*   float x = std::stod(line, &sz);
+    size = sz + 1;
+
+    float y = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    // mirroring y
+    y *= -1.0;
+
+    float z= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    // mirroring z
+    z *= -1.0;*/
+
+    std::stringstream ss(line);
+    ss>>x>>y>>z;
+    y *= -1.0;
+    z *= -1.0;
+
+    pos_gt = (cv::Mat_<float>(3,1) << x, y, z);
+    pos_gt *= 10; // position in mm
+
+
+    // orientation in radians
+ /*   float a= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float b= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float c= std::stod(line.substr(size), &sz);*/
+
+    ss>>a>>b>>c;
+
+    // weird stuff from new tsukuba team - all other approaches
+    // don't work here, since it is not clear what opencv means with
+    // euöer angles...
+    b = 180 - b;
+    c = 180 - c;
+
+    // deg to rad conversion
+    a *= M_PI/180.0;
+    b *= M_PI/180.0;
+    c *= M_PI/180.0;
+
+    // zyx representation
+    r_gt = (cv::Mat_<float>(3,1) << c, b, a);
+
+    // sin and cos of all 3 angles
+    float s_a, s_b, s_c, c_a, c_b, c_c;
+    s_a = sin(a); s_b = sin(b); s_c = sin(c);
+    c_a = cos(a); c_b = cos(b); c_c = cos(c);
+
+    // rotation matrix computation
+    R_gt = (cv::Mat_<float>(3,3) << c_c*c_b, c_b*s_c, -s_b,
+                                    c_c*s_b+s_c*s_b*s_a, c_c*c_a+s_c*s_b*s_a, c_b*s_a,
+                                    s_c*s_a+c_c*c_a*s_b, c_a*s_c*s_b-c_c*s_a, c_b*c_a);
+
+    // rotation from the given system to our system
+    cv::Mat ROT = (cv::Mat_<float>(3,3) <<
+                1, 0,  0,
+                0,-1,  0,
+                0, 0, -1);
+    R_gt = ROT*R_gt;
+    // corresponding euler angles in our system
+    cv::Rodrigues(R_gt, r_gt);
+}
+
+void read_kitti_line(std::string line, cv::Mat_<float> &pos_gt, cv::Mat_<float> &r_gt, cv::Mat_<float> &R_gt)
+{
+
+    // each line contains 12 parameters according to a row-wise representation of P
+
+    std::string::size_type sz;
+    std::string::size_type size = 0;
+    float p11, p12, p13, p14, p21, p22, p23, p24, p31, p32, p33, p34;
+
+    /*float p11 = std::stod(line, &sz);
+    size = sz + 1;
+    float p12 = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p13= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p14= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p21 = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p22 = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p23= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p24= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p31 = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p32 = std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p33= std::stod(line.substr(size), &sz);
+    size += sz + 1;
+    float p34= std::stod(line.substr(size), &sz);
+    size += sz + 1; */
+
+    std::stringstream ss(line);
+    ss>>p11>>p12>>p13>>p21>>p22>>p23>>p31>>p32>>p33;
+
+    pos_gt = (cv::Mat_<float>(3,1) << p14, p24, p34);
+    pos_gt *= 1000; // position in mm
+
+    R_gt = (cv::Mat_<float>(3,3) << p11, p12, p13,
+                                    p21, p22, p23,
+                                    p31, p32, p33);
+    cv::Rodrigues(R_gt, r_gt);
+}
+
 
